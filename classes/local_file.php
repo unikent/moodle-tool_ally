@@ -126,7 +126,7 @@ class local_file {
         global $CFG;
 
         if ($file->get_component() === 'question') {
-            return new \moodle_url($CFG->wwwroot.'/admin/tool/ally/pluginfile.php', ['pathnamehash' => $file->get_pathnamehash()]);
+            return new \moodle_url($CFG->apiroot.'/admin/tool/ally/pluginfile.php', ['pathnamehash' => $file->get_pathnamehash()]);
         }
 
         $itemid = self::preprocess_stored_file_itemid($file);
