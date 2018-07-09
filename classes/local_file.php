@@ -168,7 +168,7 @@ class local_file {
     public static function webservice_url(\stored_file $file) {
         global $CFG;
 
-        return new \moodle_url($CFG->wwwroot.'/admin/tool/ally/wspluginfile.php',
+        return new \moodle_url($CFG->wwwapiroot.'/admin/tool/ally/wspluginfile.php',
                 ['pathnamehash' => $file->get_pathnamehash()]);
     }
 
