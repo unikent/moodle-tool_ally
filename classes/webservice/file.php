@@ -61,9 +61,9 @@ class file extends \external_api {
             'mimetype'     => new \external_value(PARAM_RAW, 'File mime type'),
             'contenthash'  => new \external_value(PARAM_ALPHANUM, 'File content SHA1 hash'),
             'timemodified' => new \external_value(PARAM_TEXT, 'Last modified time of the file'),
-            'url'          => new \external_value(PARAM_LOCALURL, 'File URL'),
-            'downloadurl'  => new \external_value(PARAM_LOCALURL, 'Web service download URL'),
-            'location'     => new \external_value(PARAM_LOCALURL, 'URL to view file in context'),
+            'url'          => new \external_value(PARAM_URL, 'File URL'),
+            'downloadurl'  => new \external_value(PARAM_URL, 'Web service download URL'),
+            'location'     => new \external_value(PARAM_URL, 'URL to view file in context'),
         ]);
     }
 
