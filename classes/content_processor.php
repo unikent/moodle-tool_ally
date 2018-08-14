@@ -17,7 +17,7 @@
 /**
  * Content processor for Ally.
  * @package   tool_ally
- * @copyright Copyright (c) 2018 Blackboard Inc.
+ * @copyright Copyright (c) 2018 Blackboard Inc. (http://www.blackboard.com)
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 namespace tool_ally;
@@ -31,7 +31,7 @@ defined('MOODLE_INTERNAL') || die();
  * Can be used to process individual or groups of content.
  *
  * @package   tool_ally
- * @copyright Copyright (c) 2018 Blackboard Inc.
+ * @copyright Copyright (c) 2018 Blackboard Inc. (http://www.blackboard.com)
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class content_processor {
@@ -67,7 +67,7 @@ class content_processor {
      * @param push_content_updates $updates
      * @param component_content[] | component_content $content
      * @param string $eventname
-     * @return bool
+     * @return bool true on success
      */
     public static function push_update(push_content_updates $updates, $content, $eventname) {
         if (!is_array($content)) {
@@ -97,12 +97,12 @@ class content_processor {
             self::$pushtrace[$eventname][] = $payload;
 
             // If we aren't using a mock version of $updates service then return now.
-            if (!$updates instanceof \Prophecy\Prophecy\ProphecySubjectInterface) {
-                return true;
+            if ($updates instanceof \Prophecy\Prophecy\ProphecySubjectInterface) {
+                $updates->send($payload);
             }
+            return true; // Return true always for PHPUNIT_TEST.
         }
-        $updates->send($payload);
-        return true;
+        return $updates->send($payload);
     }
 
     /**
@@ -128,12 +128,13 @@ class content_processor {
         if (!array($content)) {
             $content = [$content];
         }
+        $dataobjects = [];
         foreach ($content as $contentitem) {
             if (empty($contentitem->content)) {
-                return;
+                continue;
             }
-            $contentrow = (object) [
-                'componentid' => $contentitem->id,
+            $dataobjects[] = (object) [
+                'comprowid' => $contentitem->id,
                 'component' => $contentitem->component,
                 'comptable' => $contentitem->table,
                 'compfield' => $contentitem->field,
@@ -142,8 +143,8 @@ class content_processor {
                 'eventname' => $eventname,
                 'content' => $contentitem->content
             ];
-            $DB->insert_record('tool_ally_content_queue', $contentrow);
         }
+        $DB->insert_records('tool_ally_content_queue', $dataobjects);
     }
 
     /**

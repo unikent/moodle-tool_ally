@@ -254,4 +254,24 @@ class local_content {
             'content_hash' => $componentcontent->contenthash
         ];
     }
+
+    /**
+     * @param int $courseid
+     * @param int $id
+     * @param string $component
+     * @throws \dml_exception
+     * @return bool|int
+     */
+    public static function queue_delete($courseid, $id, $component, $table, $field) {
+        global $DB;
+
+        return $DB->insert_record_raw('tool_ally_deleted_content', [
+            'comprowid'   => $id,
+            'courseid'    => $courseid,
+            'component'   => $component,
+            'comptable'   => $table,
+            'compfield'   => $field,
+            'timedeleted' => time(),
+        ], false);
+    }
 }

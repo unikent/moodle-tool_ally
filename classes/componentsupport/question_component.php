@@ -17,8 +17,8 @@
 /**
  * Html file replacement support for core questions
  * @package tool_ally
- * @author    Guy Thomas <gthomas@moodlerooms.com>
- * @copyright Copyright (c) 2017 Blackboard Inc.
+ * @author    Guy Thomas <citricity@gmail.com>
+ * @copyright Copyright (c) 2017 Blackboard Inc. (http://www.blackboard.com)
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -33,8 +33,8 @@ require_once($CFG->dirroot.'/question/engine/bank.php');
 /**
  * Html file replacement support for core questions
  * @package tool_ally
- * @author    Guy Thomas <gthomas@moodlerooms.com>
- * @copyright Copyright (c) 2017 Blackboard Inc.
+ * @author    Guy Thomas <citricity@gmail.com>
+ * @copyright Copyright (c) 2017 Blackboard Inc. (http://www.blackboard.com)
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class question_component extends file_component_base {
@@ -59,8 +59,18 @@ class question_component extends file_component_base {
         $arr = explode($del, $matches[2]);
         $component = urldecode(array_shift($arr));
         $filearea = array_shift($arr);
-        array_shift($arr); // Remove previewcontextid.
-        array_shift($arr); // Remove previewcomponent.
+
+        $qubaidorpreview = array_shift($arr); // Remove qubaid or "preview".
+        // Two sub-cases. See question_pluginfile() for more info.
+        if ($qubaidorpreview === 'preview') {
+            // 1. A question being previewed outside an attempt/usage.
+            array_shift($arr); // Remove previewcontextid.
+            array_shift($arr); // Remove previewcomponent.
+            array_shift($arr); // Remove questionid.
+        } else {
+            // 2. A question being attempted in the normal way.
+            array_shift($arr); // Remove slot.
+        }
         $itemid = array_shift($arr);
         $filename = array_shift($arr);
 

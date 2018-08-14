@@ -119,14 +119,24 @@ class local {
     }
 
     /**
+     * Strip mod_ from component string if necessary.
+     * @param $component
+     * @return bool|string
+     */
+    public static function clean_component_string($component) {
+        if (strpos($component, 'mod_') === 0) {
+            $component = substr($component, strlen('mod_'));
+        }
+        return $component;
+    }
+
+    /**
      * Get component class with namespace.
      * @param string $component
      * @return string
      */
     public static function get_component_class($component) {
-        if (strpos($component, 'mod_') === 0) {
-            $component = substr($component, strlen('mod_'));
-        }
+        $component = self::clean_component_string($component);
         $componentclassname = $component . '_component';
         $componentclassname = 'tool_ally\\componentsupport\\'.$componentclassname;
         return $componentclassname;
@@ -144,5 +154,33 @@ class local {
             return $componentclassname::component_type();
         }
         return false;
+    }
+
+    /**
+     * Counts list of users enrolled given a context, skipping duplicate ids.
+     * Inspired by count_enrolled_users found in theme/snap/classes/local.php
+     * Core method is counting duplicates because users can be enrolled into a course via different methods, hence,
+     * having multiple registered enrollments.
+     *
+     * @param \context $context
+     * @param string $withcapability
+     * @param int $groupid 0 means ignore groups, any other value limits the result by group id
+     * @param bool $onlyactive consider only active enrolments in enabled plugins and time restrictions
+     * @return int number of enrolled users.
+     */
+    public static function count_enrolled_users(\context $context, $withcapability = '', $groupid = 0, $onlyactive = false) {
+        global $DB;
+
+        $capjoin = get_enrolled_with_capabilities_join(
+            $context, '', $withcapability, $groupid, $onlyactive);
+
+        $sql = "SELECT COUNT(*)
+                  FROM (SELECT DISTINCT u.id
+                          FROM {user} u
+                               $capjoin->joins
+                         WHERE $capjoin->wheres AND u.deleted = 0) as uids
+                ";
+
+        return $DB->count_records_sql($sql, $capjoin->params);
     }
 }

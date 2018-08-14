@@ -16,8 +16,8 @@
 
 /**
  * Html file replacement support for core forum module
- * @author    Guy Thomas <gthomas@moodlerooms.com>
- * @copyright Copyright (c) 2018 Blackboard Inc.
+ * @author    Guy Thomas <citricity@gmail.com>
+ * @copyright Copyright (c) 2018 Blackboard Inc. (http://www.blackboard.com)
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -25,21 +25,27 @@ namespace tool_ally\componentsupport;
 
 defined ('MOODLE_INTERNAL') || die();
 
+use cm_info;
+
 use tool_ally\componentsupport\interfaces\annotation_map;
+use tool_ally\componentsupport\interfaces\content_sub_tables;
+use tool_ally\componentsupport\interfaces\html_content as iface_html_content;
+use tool_ally\componentsupport\traits\html_content;
+use tool_ally\local_content;
 use tool_ally\local_file;
 use tool_ally\models\component;
-use tool_ally\componentsupport\traits\html_content;
-use tool_ally\componentsupport\interfaces\html_content as iface_html_content;
+use tool_ally\models\component_content;
 
 use moodle_url;
 
 /**
  * Html file / content replacement support for core forum module
- * @author    Guy Thomas <gthomas@moodlerooms.com>
- * @copyright Copyright (c) 2017 / 2018 Blackboard Inc.
+ * @author    Guy Thomas <citricity@gmail.com>
+ * @copyright Copyright (c) 2017 Blackboard Inc. (http://www.blackboard.com)
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class forum_component extends file_component_base implements iface_html_content, annotation_map {
+class forum_component extends file_component_base implements
+        iface_html_content, annotation_map, content_sub_tables {
 
     use html_content;
 
@@ -72,12 +78,13 @@ class forum_component extends file_component_base implements iface_html_content,
     /**
      * Get discussion html content items.
      * @param int $courseid
+     * @param null|int $forumid
      * @param null|int $discussionid
-     * @return array
+     * @return component[]
      * @throws \coding_exception
      * @throws \dml_exception
      */
-    private function get_discussion_html_content_items($courseid, $discussionid = null) {
+    private function get_discussion_html_content_items($courseid, $forumid = null, $discussionid = null) {
         global $DB;
 
         if (!$this->module_installed()) {
@@ -96,19 +103,27 @@ class forum_component extends file_component_base implements iface_html_content,
         $discussions = '{'.$this->type.'_discussions}';
         $posts = '{'.$this->type.'_posts}';
 
+        $forumfilter = '';
+        $discussionfilter = '';
+        $params = [$courseid];
+
+        if (!is_null($forumid)) {
+            $forumfilter = ' AND fd.forum = ? ';
+            $params[] = $forumid;
+        }
+
         if (!is_null($discussionid)) {
             $discussionfilter = ' AND fd.id = ? ';
-            $params = [$courseid, $discussionid, FORMAT_HTML];
-        } else {
-            $discussionfilter = '';
-            $params = [$courseid, FORMAT_HTML];
+            $params[] = $discussionid;
         }
+
+        $params[] = FORMAT_HTML;
 
         $sql = <<<SQL
             SELECT fp.*
               FROM $discussions fd
               JOIN $posts fp
-                ON fd.course = ? $discussionfilter
+                ON fd.course = ? $forumfilter $discussionfilter
                AND fp.discussion = fd.id
                AND fp.parent = 0
                AND fp.messageformat = ?
@@ -126,39 +141,12 @@ SQL;
         return $array;
     }
 
-    /**
-     * Get forum intro content items.
-     * @param int $courseid
-     * @return array
-     * @throws \dml_exception
-     */
-    private function get_forum_intro_html_content_items($courseid) {
-        global $DB;
-
-        if (!$this->module_installed()) {
-            return [];
-        }
-
-        $array = [];
-
-        $select = "course = ? AND introformat = ? AND intro !=''";
-        $rs = $DB->get_recordset_select($this->type, $select, [$courseid, FORMAT_HTML]);
-        foreach ($rs as $row) {
-            $array[] = new component(
-                $row->id, $this->type, $this->type, 'intro', $courseid, $row->timemodified,
-                $row->introformat, $row->name);
-        }
-        $rs->close();
-
-        return $array;
-    }
-
     public function get_course_html_content_items($courseid) {
         if (!$this->module_installed()) {
             return [];
         }
 
-        $introarray = $this->get_forum_intro_html_content_items($courseid);
+        $introarray = $this->get_intro_html_content_items($courseid);
         $discussionarray = $this->get_discussion_html_content_items($courseid);
 
         return array_merge($introarray, $discussionarray);
@@ -172,13 +160,13 @@ SQL;
         }
 
         if ($PAGE->pagetype === 'mod-'.$this->type.'-discuss') {
-            $params = $PAGE->url->params();
-            if (!isset($params['d'])) {
+            $discussion = optional_param('d', null, PARAM_INT);
+            if ($discussion === null) {
                 return [];
             }
-            $contentitems = $this->get_discussion_html_content_items($courseid, $params['d']);
+            $contentitems = $this->get_discussion_html_content_items($courseid, null, $discussion);
         } else {
-            $contentitems = $this->get_forum_intro_html_content_items($courseid);
+            $contentitems = $this->get_intro_html_content_items($courseid);
         }
 
         $posts = [];
@@ -215,18 +203,35 @@ SQL;
 
         $main = $this->get_html_content($id, $this->type, 'intro');
         $discussions = '{'.$this->type.'_discussions}';
-        $posts = '{'.$this->type.'_posts}';
+        $poststable = '{'.$this->type.'_posts}';
         $sql = <<<SQL
-            SELECT fp.*
+            SELECT fp.*,fd.course AS courseid
               FROM $discussions fd
-              JOIN $posts fp
+              JOIN $poststable fp
                ON fp.discussion = fd.id
                AND fp.parent = 0
                AND fp.messageformat = ?
             WHERE fd.forum = ?
 SQL;
         $params = [FORMAT_HTML, $id];
-        $posts = $DB->get_records_sql($sql, $params);
+        $stdposts = $DB->get_records_sql($sql, $params);
+        $posts = array_map(function ($stdpost) {
+            $table = $this->type.'_posts';
+            $field = 'message';
+            $url = $this->make_url($stdpost->id, $table, $field, $stdpost->courseid);
+            return new component_content(
+                $stdpost->id,
+                $this->get_component_name(),
+                $table,
+                $field,
+                $stdpost->courseid,
+                $stdpost->modified,
+                $stdpost->messageformat,
+                $stdpost->message,
+                $stdpost->subject,
+                $url
+            );
+        }, $stdposts);
         return array_merge([$main], $posts);
     }
 
@@ -280,5 +285,10 @@ SQL;
             return new moodle_url('/mod/'.$this->type.'/discuss.php?d='.$discussionid.'#p'.$id).'';
         }
         return null;
+    }
+
+    public function queue_delete_sub_tables(cm_info $cm) {
+        $discussions = $this->get_discussion_html_content_items($cm->course, $cm->instance);
+        $this->bulk_queue_delete_content($discussions);
     }
 }
